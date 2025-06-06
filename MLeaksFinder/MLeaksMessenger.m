@@ -11,10 +11,23 @@
  */
 
 #import "MLeaksMessenger.h"
+#import <objc/runtime.h>
 
+#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 90000
 static __weak UIAlertView *alertView;
+#else
+static __weak UIAlertView *alertView;
+#endif
 
 @implementation MLeaksMessenger
+
++ (void)setShowAlert:(BOOL)showAlert {
+    objc_setAssociatedObject(self, @"showAlert", @(showAlert), OBJC_ASSOCIATION_ASSIGN);
+}
+
++ (BOOL)showAlert {
+    return [objc_getAssociatedObject(self, @"showAlert") boolValue];
+}
 
 + (void)alertWithTitle:(NSString *)title message:(NSString *)message {
     [self alertWithTitle:title message:message delegate:nil additionalButtonTitle:nil];
@@ -24,16 +37,61 @@ static __weak UIAlertView *alertView;
                message:(NSString *)message
               delegate:(id<UIAlertViewDelegate>)delegate
  additionalButtonTitle:(NSString *)additionalButtonTitle {
-    [alertView dismissWithClickedButtonIndex:0 animated:NO];
-    UIAlertView *alertViewTemp = [[UIAlertView alloc] initWithTitle:title
-                                                            message:message
-                                                           delegate:delegate
-                                                  cancelButtonTitle:@"OK"
-                                                  otherButtonTitles:additionalButtonTitle, nil];
-    [alertViewTemp show];
-    alertView = alertViewTemp;
-    
-    NSLog(@"%@: %@", title, message);
+    if ([self showAlert]) {
+        [alertView dismissWithClickedButtonIndex:0 animated:NO];
+        if (@available(iOS 9, *)) {
+            UIAlertController * alertViewTemp = [UIAlertController
+                                                 alertControllerWithTitle:title
+                                                 message:message
+                                                 preferredStyle:UIAlertControllerStyleAlert];
+            
+            UIAlertAction *okAction = [UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action){
+                //do something when click button
+            }];
+            [alertViewTemp addAction:okAction];
+            [[self getCurrentVC] presentViewController:alertViewTemp animated:YES completion:nil];
+        }
+        else{
+            UIAlertView *alertViewTemp = [[UIAlertView alloc] initWithTitle:title
+                                                                    message:message
+                                                                   delegate:delegate
+                                                          cancelButtonTitle:@"OK"
+                                                          otherButtonTitles:additionalButtonTitle, nil];
+            [alertViewTemp show];
+            alertView = alertViewTemp;
+        }
+    }
+    NSLog(@"MLeaksFinder: %@: %@", title, message);
 }
+
+//获取当前屏幕显示的viewcontroller
++ (UIViewController *)getCurrentVC {
+   ///下文中有分析
+    UIViewController *rootViewController = [UIApplication sharedApplication].keyWindow.rootViewController;
+    UIViewController *currentVC = [self getCurrentVCFrom:rootViewController];
+    return currentVC;
+}
+
++ (UIViewController *)getCurrentVCFrom:(UIViewController *)rootVC {
+    UIViewController *currentVC;
+    if ([rootVC presentedViewController]) {
+        // 视图是被presented出来的
+        rootVC = [rootVC presentedViewController];
+    }
+
+    if ([rootVC isKindOfClass:[UITabBarController class]]) {
+        // 根视图为UITabBarController
+        currentVC = [self getCurrentVCFrom:[(UITabBarController *)rootVC selectedViewController]];
+    } else if ([rootVC isKindOfClass:[UINavigationController class]]){
+        // 根视图为UINavigationController
+        currentVC = [self getCurrentVCFrom:[(UINavigationController *)rootVC visibleViewController]];
+    } else {
+        // 根视图为非导航类
+        currentVC = rootVC;
+    }
+    
+    return currentVC;
+}
+
 
 @end

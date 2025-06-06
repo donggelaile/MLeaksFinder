@@ -14,7 +14,7 @@
 #import <UIKit/UIKit.h>
 
 @interface MLeaksMessenger : NSObject
-
+@property (nonatomic, assign, class) BOOL showAlert;
 + (void)alertWithTitle:(NSString *)title message:(NSString *)message;
 + (void)alertWithTitle:(NSString *)title
                message:(NSString *)message
